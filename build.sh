@@ -187,8 +187,7 @@ sudo iptables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 80 -j REDIRECT --t
   && sudo iptables -A INPUT -p udp -m udp --dport 5353 -j ACCEPT\
   && sudo iptables -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT\
   && sudo iptables -A INPUT -p tcp -m tcp --dport 8080 -j ACCEPT\
-  && sudo iptables -A INPUT -p tcp -m tcp --dport 443 -j ACCEPT\
-  && sudo iptables -A INPUT -j REJECT --reject-with icmp-host-prohibited
+  && sudo iptables -A INPUT -p tcp -m tcp --dport 443 -j ACCEPT
 log_action_end_msg $?
 
 log_action_begin_msg "adding IPv6 iptables rules"
@@ -204,8 +203,7 @@ sudo ip6tables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 80 -j REDIRECT --
   && sudo ip6tables -A INPUT -p udp -m udp --dport 5353 -j ACCEPT\
   && sudo ip6tables -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT\
   && sudo ip6tables -A INPUT -p tcp -m tcp --dport 8080 -j ACCEPT\
-  && sudo ip6tables -A INPUT -p tcp -m tcp --dport 443 -j ACCEPT\
-  && sudo ip6tables -A INPUT -j REJECT --reject-with icmp6-adm-prohibited
+  && sudo ip6tables -A INPUT -p tcp -m tcp --dport 443 -j ACCEPT
 log_action_end_msg $?
 
 # check if public IPv6 access is available
