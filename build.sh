@@ -175,7 +175,13 @@ else
 fi
 
 log_action_begin_msg "adding IPv4 iptables rules"
-sudo iptables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 80 -j REDIRECT --to-port 8080\
+# flush all chains
+sudo iptables -F\
+&& sudo iptables -t nat -F\
+&& sudo iptables -t mangle -F\
+# delete all chains
+&& iptables -X\
+&& sudo iptables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 80 -j REDIRECT --to-port 8080\
   && sudo iptables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 443 -j REDIRECT --to-port 8080\
   && sudo iptables -t nat -A PREROUTING -i ${IFACE} -p udp --dport 53 -j REDIRECT --to-port 5353\
   && sudo iptables -t nat -A POSTROUTING -o ${IFACE} -j MASQUERADE\
@@ -191,7 +197,13 @@ sudo iptables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 80 -j REDIRECT --t
 log_action_end_msg $?
 
 log_action_begin_msg "adding IPv6 iptables rules"
-sudo ip6tables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 80 -j REDIRECT --to-port 8080\
+# flush all chains
+sudo ip6tables -F\
+&& sudo ip6tables -t nat -F\
+&& sudo ip6tables -t mangle -F\
+# delete all chains
+&& ip6tables -X\
+&& sudo ip6tables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 80 -j REDIRECT --to-port 8080\
   && sudo ip6tables -t nat -A PREROUTING -i ${IFACE} -p tcp --dport 443 -j REDIRECT --to-port 8080\
   && sudo ip6tables -t nat -A PREROUTING -i ${IFACE} -p udp --dport 53 -j REDIRECT --to-port 5353\
   && sudo iptables -t nat -A POSTROUTING -o ${IFACE} -j MASQUERADE\
