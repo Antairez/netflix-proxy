@@ -306,7 +306,7 @@ log_action_end_msg $?
 
 log_action_begin_msg "installing Python3 and requirements"
 sudo apt-get -y update &>> ${CWD}/netflix-proxy.log\
-  && sudo apt-get -y install git python3.6 python3-venv python3-pip sqlite3 &>> ${CWD}/netflix-proxy.log\
+  && sudo apt-get -y install git python3-venv python3-pip sqlite3 &>> ${CWD}/netflix-proxy.log\
   && python3 -m venv venv &>> ${CWD}/netflix-proxy.log\
   && source venv/bin/activate &>> ${CWD}/netflix-proxy.log\
   && pip3 install pip --upgrade &>> ${CWD}/netflix-proxy.log\
