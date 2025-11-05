@@ -121,6 +121,8 @@ invoice.stripe.com
 stripe.com
 openai.com
 chatgpt.com
+oaistatic.com
+oaiusercontent.com
 browser-intake-datadoghq.com
 sentry.io
 chat.openai.com.cdn.cloudflare.net
