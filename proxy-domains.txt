@@ -145,3 +145,13 @@ bytecdn.cn
 byted.org
 ibytedtos.com
 apple-relay.apple.com
+imap.gmail.com
+imap-mail.outlook.com
+outlook.office365.com
+imap.mail.yahoo.com
+imap.mail.me.com
+imap.qq.com
+imap.exmail.qq.com
+imap.163.com
+imap.126.com
+imap.qiye.163.com
