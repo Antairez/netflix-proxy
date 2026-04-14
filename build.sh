@@ -218,10 +218,10 @@ sudo ip6tables -F\
   && sudo ip6tables -A INPUT -p tcp -m tcp --dport 8080 -j ACCEPT\
   && sudo ip6tables -A INPUT -p tcp -m tcp --dport 443 -j ACCEPT\
   && sudo ip6tables -A INPUT -p tcp -m tcp --dport 8443 -j ACCEPT\
-  && sudo iptables -A INPUT -p tcp -m tcp --dport 2096 -j ACCEPT\
-  && sudo iptables -A INPUT -p tcp -m tcp --dport 2053 -j ACCEPT\
-  && sudo iptables -A INPUT -p tcp -m tcp --dport 444 -j ACCEPT\
-  && sudo iptables -A INPUT -j REJECT --reject-with icmp-host-prohibited
+  && sudo ip6tables -A INPUT -p tcp -m tcp --dport 2096 -j ACCEPT\
+  && sudo ip6tables -A INPUT -p tcp -m tcp --dport 2053 -j ACCEPT\
+  && sudo ip6tables -A INPUT -p tcp -m tcp --dport 444 -j ACCEPT\
+  && sudo ip6tables -A INPUT -j REJECT --reject-with icmp-host-prohibited
 log_action_end_msg $?
 
 # check if public IPv6 access is available
