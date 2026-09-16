@@ -68,6 +68,20 @@ log_action_begin_msg "checking if Docker is installed"
 which docker > /dev/null
 log_action_end_msg $?
 
+# docker-compose (v1) on older hosts, the compose plugin (docker compose) on newer ones;
+# $(which docker-compose) is empty on the latter and every compose step silently did nothing
+log_action_begin_msg "checking for docker-compose"
+if which docker-compose > /dev/null 2>&1; then
+    DOCKER_COMPOSE="$(which docker-compose)"
+elif docker compose version > /dev/null 2>&1; then
+    DOCKER_COMPOSE="$(which docker) compose"
+else
+    log_action_end_msg 1
+    printf "neither docker-compose nor the docker compose plugin is available\n"
+    exit 1
+fi
+log_action_end_msg $?
+
 log_action_begin_msg "checking if sudo is installed"
 which sudo > /dev/null
 log_action_end_msg $?
@@ -161,19 +175,6 @@ fi
 pushd ${CWD} &>> ${CWD}/netflix-proxy.log
 
 # configure iptables
-if [[ -n "${CLIENTIP}" ]]; then
-    log_action_begin_msg "authorising clientip=${CLIENTIP} on iface=${IFACE}"
-    if [[ "${IS_CLIENT_IPV4}" == '0' ]]; then
-        sudo iptables -t nat -A PREROUTING -s ${CLIENTIP}/32 -i ${IFACE} -j ACCEPT
-    fi
-    if [[ "${IS_CLIENT_IPV6}" == '0' ]]; then
-        sudo ip6tables -t nat -A PREROUTING -s ${CLIENTIP}/128 -i ${IFACE} -j ACCEPT
-    fi
-    log_action_end_msg $?
-else
-    log_action_cont_msg "unable to resolve and authorise client ip"
-fi
-
 log_action_begin_msg "adding IPv4 iptables rules"
 sudo iptables -F\
   && sudo iptables -t nat -F\
@@ -223,6 +224,22 @@ sudo ip6tables -F\
   && sudo ip6tables -A INPUT -p tcp -m tcp --dport 444 -j ACCEPT\
   && sudo ip6tables -A INPUT -j REJECT --reject-with icmp6-adm-prohibited
 log_action_end_msg $?
+
+# authorise the client only now: both rule sets above start with a flush, so an ACCEPT
+# added before them was wiped and the client got redirected to the admin page and the
+# bogus DNS. Insert (-I) so it sits ahead of the REDIRECT rules.
+if [[ -n "${CLIENTIP}" ]]; then
+    log_action_begin_msg "authorising clientip=${CLIENTIP} on iface=${IFACE}"
+    if [[ "${IS_CLIENT_IPV4}" == '0' ]]; then
+        sudo iptables -t nat -I PREROUTING -s ${CLIENTIP}/32 -i ${IFACE} -j ACCEPT
+    fi
+    if [[ "${IS_CLIENT_IPV6}" == '0' ]]; then
+        sudo ip6tables -t nat -I PREROUTING -s ${CLIENTIP}/128 -i ${IFACE} -j ACCEPT
+    fi
+    log_action_end_msg $?
+else
+    log_action_cont_msg "unable to resolve and authorise client ip"
+fi
 
 # check if public IPv6 access is available
 log_action_begin_msg "creating Docker and sniproxy configuration templates"
@@ -320,13 +337,15 @@ sudo apt-get -y update &>> ${CWD}/netflix-proxy.log\
   && python3 -m venv venv &>> ${CWD}/netflix-proxy.log\
   && source venv/bin/activate &>> ${CWD}/netflix-proxy.log\
   && pip3 install pip --upgrade &>> ${CWD}/netflix-proxy.log\
-  && pip3 install -r requirements.txt &>> ${CWD}/netflix-proxy.log\
-  && pip3 install -r ${CWD}/auth/requirements.txt &>> ${CWD}/netflix-proxy.log
+  && pip3 install -r ${CWD}/auth/requirements.txt &>> ${CWD}/netflix-proxy.log\
+  && pip3 install -r requirements.txt &>> ${CWD}/netflix-proxy.log
 log_action_end_msg $?
 
 log_action_begin_msg "configuring admin backend"
-PLAINTEXT=$(${CWD}/auth/pbkdf2_sha256_hash.py | awk '{print $1}')\
-  && HASH=$(${CWD}/auth/pbkdf2_sha256_hash.py ${PLAINTEXT} | awk '{print $2}')\
+PLAINTEXT=$(${CWD}/venv/bin/python ${CWD}/auth/pbkdf2_sha256_hash.py | awk '{print $1}')\
+  && [[ -n "${PLAINTEXT}" ]]\
+  && HASH=$(${CWD}/venv/bin/python ${CWD}/auth/pbkdf2_sha256_hash.py ${PLAINTEXT} | awk '{print $2}')\
+  && [[ -n "${HASH}" ]]\
   && sudo cp ${CWD}/auth/db/auth.default.db ${CWD}/auth/db/auth.db &>> ${CWD}/netflix-proxy.log\
   && sudo $(which sqlite3) ${CWD}/auth/db/auth.db "UPDATE users SET password = '${HASH}' WHERE ID = 1;" &>> ${CWD}/netflix-proxy.log\
   && sudo $(which sqlite3) ${CWD}/auth/db/auth.db "UPDATE users SET expires = date('now', '+99 years') WHERE ID = 1;" &>> ${CWD}/netflix-proxy.log
@@ -346,20 +365,20 @@ log_action_end_msg $?
 
 if [[ "${DOCKER_BUILD}" == '1' ]]; then
     log_action_begin_msg "pulling and building docker containers from source"
-    sudo $(which docker-compose) build &>> ${CWD}/netflix-proxy.log
+    sudo ${DOCKER_COMPOSE} build &>> ${CWD}/netflix-proxy.log
     for service in dnsmasq-service dnsmasq-bogus-service caddy-service; do
-        sudo $(which docker-compose) pull ${service} &>> ${CWD}/netflix-proxy.log
+        sudo ${DOCKER_COMPOSE} pull ${service} &>> ${CWD}/netflix-proxy.log
     done
     log_action_end_msg $?
 else
     log_action_begin_msg "pulling Docker containers"
-    sudo $(which docker-compose) pull &>> ${CWD}/netflix-proxy.log
+    sudo ${DOCKER_COMPOSE} pull &>> ${CWD}/netflix-proxy.log
     log_action_end_msg $?
 fi
 
 log_action_begin_msg "creating and starting Docker containers"
   EXTIP=${EXTIP} EXTIP6=${EXTIP6}\
-  $(which docker-compose) up -d &>> ${CWD}/netflix-proxy.log
+  ${DOCKER_COMPOSE} up -d &>> ${CWD}/netflix-proxy.log
 log_action_end_msg $?
 
 # configure appropriate init system
@@ -415,7 +434,11 @@ if [[ -n "${EXTIP6}" ]] || [[ -n "${IPADDR6}" ]]; then
     log_action_end_msg $?
 fi
 
-printf "\nnetflix-proxy-admin site=http://${EXTIP}:8080/ credentials=\e[1madmin:${PLAINTEXT}\033[0m\n"
+if [[ -n "${PLAINTEXT}" ]]; then
+    printf "\nnetflix-proxy-admin site=http://${EXTIP}:8080/ credentials=\e[1madmin:${PLAINTEXT}\033[0m\n"
+else
+    printf "\nnetflix-proxy-admin site=http://${EXTIP}:8080/ \e[31madmin password was NOT set, see ${CWD}/netflix-proxy.log\033[0m\n"
+fi
 log_action_begin_msg "testing netflix-proxy admin site"
 (with_backoff $(which curl) --silent -4\
   --fail http://${EXTIP}:8080/ &>> ${CWD}/netflix-proxy.log\
