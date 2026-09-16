@@ -155,3 +155,11 @@ imap.exmail.qq.com
 imap.163.com
 imap.126.com
 imap.qiye.163.com
+claude.ai
+claude.com
+anthropic.com
+gemini.google.com
+bard.google.com
+aistudio.google.com
+alkalimakersuite-pa.clients6.google.com
+generativelanguage.googleapis.com
