@@ -77,24 +77,51 @@ for fam in 4 6; do
     changed=1
 done
 
-[[ ${changed} == 1 ]] || exit 0
-[[ "${DRY_RUN}" == 1 ]] && { log "DRY_RUN=1: nothing written"; exit 0; }
-
 EXTIP=$(configured_ip 4)
 EXTIP6=$(configured_ip 6)
 
-# dnsmasq-bogus carries the IP on its command line, so it has to be recreated, not restarted
+# dnsmasq-bogus carries the IP on its command line, so it has to be recreated, not restarted.
+# Compare against the running container as well: it can be stale while dnsmasq.conf is
+# current (conf fixed by hand or by an older updater that never touched dnsmasq-bogus).
+bogus_answer() {
+    docker inspect -f '{{range .Config.Cmd}}{{.}} {{end}}' dnsmasq-bogus 2>/dev/null \
+        | grep -oE '/#/[^ ]*' | cut -d/ -f3 | while read -r ip; do valid_ip "$1" "${ip}" && echo "${ip}"; done | head -n 1
+}
+bogus_stale=0
+if [[ -f "${CWD}/docker-compose.yml" ]] && docker inspect dnsmasq-bogus >/dev/null 2>&1; then
+    b4=$(bogus_answer 4); b6=$(bogus_answer 6)
+    if [[ "${b4}" != "${EXTIP}" || "${b6}" != "${EXTIP6}" ]]; then
+        bogus_stale=1
+        # a recreate that keeps failing would otherwise be retried (and logged) every minute
+        mark=/run/netflix-proxy-extip.bogusfail
+        if [[ ${changed} == 0 && -e ${mark} && -z $(find ${mark} -mmin +60 2>/dev/null) ]]; then
+            bogus_stale=0
+        fi
+    fi
+fi
+
+[[ ${changed} == 1 || ${bogus_stale} == 1 ]] || exit 0
+if [[ "${DRY_RUN}" == 1 ]]; then
+    [[ ${bogus_stale} == 1 ]] && log "dnsmasq-bogus answers ${b4:-none}${b6:+ / ${b6}}, dnsmasq.conf has ${EXTIP:-none}${EXTIP6:+ / ${EXTIP6}}"
+    log "DRY_RUN=1: nothing written"
+    exit 0
+fi
+
 compose() { if command -v docker-compose >/dev/null 2>&1; then docker-compose "$@"; else docker compose "$@"; fi; }
 if [[ -f "${CWD}/docker-compose.yml" ]]; then
     if (cd "${CWD}" && EXTIP=${EXTIP} EXTIP6=${EXTIP6} compose up -d --no-deps dnsmasq-bogus-service) >/dev/null 2>&1; then
-        log "dnsmasq-bogus recreated"
+        rm -f /run/netflix-proxy-extip.bogusfail
+        log "dnsmasq-bogus recreated, now answering ${EXTIP}${EXTIP6:+ / ${EXTIP6}}"
     else
+        touch /run/netflix-proxy-extip.bogusfail
         log "WARN: could not recreate dnsmasq-bogus (unauthorised clients may still get the old IP)"
     fi
 fi
 
-if docker restart dnsmasq >/dev/null 2>&1; then
-    log "dnsmasq restarted, now answering ${EXTIP}${EXTIP6:+ / ${EXTIP6}}"
-else
-    log "ERROR: docker restart dnsmasq failed"
+if [[ ${changed} == 1 ]]; then
+    if docker restart dnsmasq >/dev/null 2>&1; then
+        log "dnsmasq restarted, now answering ${EXTIP}${EXTIP6:+ / ${EXTIP6}}"
+    else
+        log "ERROR: docker restart dnsmasq failed"
+    fi
 fi
