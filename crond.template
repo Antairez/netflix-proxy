@@ -6,3 +6,4 @@
 #
 
 */5 * * * * root {{CWD}}/scripts/ddns_updater.sh
+* * * * * root {{CWD}}/scripts/extip_updater.sh >> /var/log/netflix-proxy-extip.log 2>&1
